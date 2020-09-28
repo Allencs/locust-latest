@@ -4,7 +4,7 @@ import os
 import threading
 import time
 import traceback
-
+from pypool import PoolResources
 import pymysql
 from locust import task, TaskSet, User, events, between
 
@@ -21,6 +21,7 @@ def spawning_complete(user_count):
 
 @events.test_stop.add_listener
 def on_test_stop(**kwargs):
+    # pool.close()
     print("A new test is ending")
 
 
@@ -60,25 +61,35 @@ class MyClient(object):
         logging.info("set time --> {}".format(strTime))
 
 
+ip = '192.168.3.20'
+username = 'root'
+pwd = '123456'
+
+pool = PoolResources(ip, 3306, username, pwd, "allen_mix", maxActive=20, minIdle=5, maxWait=1)
+
+
 class MySqlClient(object):
     _locust_environment = None
 
-    ip = '192.168.3.20'
-    username = 'root'
-    pwd = '123456'
+    # ip = '192.168.3.20'
+    # username = 'root'
+    # pwd = '123456'
 
     def __init__(self):
-        self.pool = {}
+        # self.pool = {}
+        pass
 
-    def getInstance(self, dbname):
-        name = threading.current_thread().name
-        if name not in self.pool:
-            conn = pymysql.connect(self.ip, self.username, self.pwd, dbname)
-            self.pool[name] = conn
-        return self.pool[name]
+    # def getInstance(self, dbname):
+    #     name = threading.current_thread().name
+    #     if name not in self.pool:
+    #         conn = pymysql.connect(self.ip, self.username, self.pwd, dbname)
+    #         self.pool[name] = conn
+    #     return self.pool[name]
 
     def showDB(self):
-        db = self.getInstance('allen_mix')
+        # db = self.getInstance('allen_mix')
+        db = pool.getResource()
+        print("current occupied conn:", pool.busySize)
         cursor = db.cursor()
         start_time = time.time()
         try:
@@ -92,11 +103,15 @@ class MySqlClient(object):
                                                                  response_length=0)
             raise error
         else:
+            print(cursor.fetchone())
             total_time = int((time.time() - start_time) * 1000)
             self._locust_environment.events.request_success.fire(request_type="PyMySQL",
                                                                  name='Query',
                                                                  response_time=total_time,
                                                                  response_length=0)
+        finally:
+            # self.pool.release()
+            pass
 
 
 class MyLocust(User):
@@ -113,9 +128,13 @@ class MyLocust(User):
 class UserBehavior(TaskSet):
 
     def on_stop(self):
-        currentThread = threading.current_thread().getName()
-        self.client.pool[currentThread].close()
-        logging.info("{} --> connection closed".format(currentThread))
+        # currentThread = threading.current_thread().getName()
+        # self.client.pool[currentThread].close()
+        # logging.info("{} --> connection closed".format(currentThread))
+        # pool.close()
+        pool.release()
+        print("current occupied conn:", pool.busySize)
+        pass
 
     # @task
     def show(self):
