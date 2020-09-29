@@ -2,26 +2,27 @@ import logging
 import queue
 import threading
 import time
-
 import pymysql
 
 
 class PoolResources(object):
 
-    # 最大活动连接数
+    # max active connections, default -1 which means unlimited
     maxActive = None
 
-    # 最小空闲连接数
+    # min idle connections, default 5
     minIdle = None
 
-    # 最大等待时间
+    # max wait time to get connection source
     maxWait = None
 
+    # save connection instance, use getResource method to get conn instance
     dataSources = None
 
+    # save occupied connections, the connection in this dict means which is current using
     busySources = {}
 
-    def __init__(self, host, port, username, pwd, dbname, maxActive=None, minIdle=None, maxWait=None):
+    def __init__(self, host, port, username, pwd, dbname, maxActive=-1, minIdle=5, maxWait=3):
 
         self.host = host
         self.port = port
@@ -29,37 +30,29 @@ class PoolResources(object):
         self.pwd = pwd
         self.dbname = dbname
 
-        if maxActive is not None:
-            try:
-                float(maxActive)
-                self.maxActive = maxActive
-            except ValueError as max_active_e:
-                raise Exception("{}, maxActive value error, should be int".format(max_active_e))
+        if isinstance(maxActive, int):
+            self.maxActive = maxActive
         else:
-            self.maxActive = -1
+            raise Exception("maxActive value error, must be int")
 
-        if minIdle is not None:
-            try:
-                float(minIdle)
-                self.minIdle = minIdle
-            except ValueError as min_idle_e:
-                raise Exception("{}, minIdle value error, should be int".format(min_idle_e))
+        if isinstance(minIdle, int):
+            self.minIdle = minIdle
         else:
-            self.minIdle = 5
+            raise Exception("minIdle value error, must be int")
 
-        if maxWait is not None:
-            try:
-                float(maxWait)
-                self.maxWait = maxWait
-            except ValueError as max_wait_e:
-                raise Exception("{}, maxWait value error, should be int".format(max_wait_e))
+        if isinstance(maxWait, int):
+            self.maxWait = maxWait
         else:
-            self.maxWait = 1
+            raise Exception("maxWait value error, must be int")
 
         self.dataSources = queue.Queue(maxsize=self.maxActive)
         self.initPool()
 
     def connectionInstance(self):
+        """
+        create database connection instance
+        :return: A Connection Object
+        """
         try:
             conn = pymysql.connect(self.host, self.username, self.pwd, self.dbname)
         except pymysql.DatabaseError as error:
@@ -68,6 +61,10 @@ class PoolResources(object):
             return conn
 
     def initPool(self):
+        """
+        init connection pool, set the minIdle connection instances in dataSources
+        :return:
+        """
         if self.dataSources.qsize() == 0:
             for _ in range(0, self.minIdle):
                 self.dataSources.put_nowait(self.connectionInstance())
@@ -75,19 +72,33 @@ class PoolResources(object):
 
     @property
     def currentSize(self):
+        """
+        :return: the number of idle connections
+        """
         return self.dataSources.qsize()
 
     @property
     def busySize(self):
+        """
+        :return: the number of occupied connections
+        """
         return len(self.busySources)
 
     def addInstance(self):
+        """
+        add connection instances when there are no idle connection instances
+        :return:
+        """
         if self.maxActive > 0 and self.currentSize + len(self.busySources) <= self.maxActive:
             return self.connectionInstance()
         else:
             raise Exception("no available resources, pool is full")
 
     def getResource(self):
+        """
+        get connection instance from pool
+        :return: A Connection Object
+        """
         currentThread = threading.current_thread().getName()
         try:
             instance = self.dataSources.get(timeout=self.maxWait)
@@ -100,6 +111,10 @@ class PoolResources(object):
             return self.busySources[currentThread]
 
     def release(self):
+        """
+        return the connection into the pool
+        :return:
+        """
         currentThread = threading.current_thread().getName()
         try:
             self.dataSources.put_nowait(self.busySources.pop(currentThread))
@@ -107,7 +122,10 @@ class PoolResources(object):
             raise error
 
     def close(self):
-        print("xiaohui")
+        """
+        close all the connections in pool and busySources
+        :return:
+        """
         if self.busySources.__sizeof__() > 0:
             for conn in self.busySources:
                 try:
@@ -129,24 +147,9 @@ class PoolResources(object):
 
 
 if __name__ == '__main__':
-    ip = '192.168.3.20'
-    username = 'root'
-    pwd = '123456'
-    pool = PoolResources(ip, 3306, username, pwd, "allen_mix", maxActive=20, minIdle=5, maxWait=1)
+    ip = '10.13.4.16'
+    username = 'test_account'
+    pwd = 'YS5boBtGfkVpO3pb'
+    dbname = 'woody_test_db'
+    pool = PoolResources(ip, 3306, username, pwd, dbname, maxActive=20, minIdle=5, maxWait=1)
     time.sleep(5)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
