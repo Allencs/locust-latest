@@ -84,6 +84,7 @@ class MySqlClient(object):
     #     if name not in self.pool:
     #         conn = pymysql.connect(self.ip, self.username, self.pwd, dbname)
     #         self.pool[name] = conn
+
     #     return self.pool[name]
 
     def showDB(self):
