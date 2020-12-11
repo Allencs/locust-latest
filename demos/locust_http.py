@@ -10,6 +10,12 @@ class MyTasks(TaskSet):
     def task1(self):
         print("this is first task...")
 
+    """
+    使用task装饰器，标记任务方法
+    1、任务可以是一个方法，也可以是一个类（方法集合）
+    2. 如果是任务类，必须继承TaskSet或者SequentialTaskSet（有序任务类）
+    3.任务类可以嵌套
+    """
     @task
     class MyApi(SequentialTaskSet):
 
@@ -17,13 +23,10 @@ class MyTasks(TaskSet):
 
         @task
         def token(self):
-            # response = self.client.get("/pftest/myApi/token")
-            # if response is not None:
-            #     print("RescheduleTask()")
-            #     raise RescheduleTask()
-            with self.client.get("/", catch_response=True) as response:
+            with self.client.get("/pftest/myApi/token", catch_response=True) as response:
                 if response.text is None:
                     response.failure("Got wrong response")
+                    # raise RescheduleTask()
 
         # @task
         def personInfo(self):
@@ -43,8 +46,13 @@ class MyTasks(TaskSet):
         print("this is third task...")
 
 
-class MyUser(FastHttpUser):
+class MyUser(HttpUser):
+    """
+    - 将方法传入locust执行类
+    - 此处可设置每次请求间隔时间
+    """
     wait_time = between(0, 0)
+    # 执行类中的tasks属性，接受任务类，需传入一个列表
     tasks = [MyTasks]
 
 
